@@ -1,11 +1,26 @@
 use actix_web::{get,post, web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
+use crate::model::bukumodel::Entity as Buku;
+use sea_orm::EntityTrait;
+use crate::db::connect;
 
+
+
+#[derive(Serialize, Deserialize)]
+struct BukuInput {
+    tahun_terbit: i32,
+    penulis: String,
+    judul: String,
+}
 
 
 #[get("/index")]
-async fn index(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
+async fn index() -> impl Responder {
+    let db = connect().await;
+    match Buku::find().all(&db).await{
+        Ok(buku) => HttpResponse::Ok().json(buku),
+        Err(_) => HttpResponse::InternalServerError().finish(),
+    }
 }
 
 
