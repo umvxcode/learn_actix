@@ -1,65 +1,111 @@
-use actix_web::{get,post, web, HttpResponse, Responder};
-use serde::{Deserialize, Serialize};
+use actix_web::{delete, get, post, web, HttpResponse, Responder};
+use serde::Deserialize;
 use crate::model::bukumodel::Entity as Buku;
-use sea_orm::EntityTrait;
+use crate::model::bukumodel::ActiveModel as BukuActive;
+use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use crate::db::connect;
+use crate::response::ApiResponse;
 
 
+#[derive(Deserialize)]
+struct  PostedUpdate{
+    pub id: i32,
+    pub tahun_terbit: i32,
+    pub penulis: String,
+    pub judul: String,
+}
 
-#[derive(Serialize, Deserialize)]
-struct BukuInput {
-    tahun_terbit: i32,
-    penulis: String,
-    judul: String,
+
+#[derive(Deserialize)]
+struct  PostedCreate{
+    pub tahun_terbit: i32,
+    pub penulis: String,
+    pub judul: String,
 }
 
 
 #[get("/index")]
 async fn index() -> impl Responder {
     let db = connect().await;
-    match Buku::find().all(&db).await{
-        Ok(buku) => HttpResponse::Ok().json(buku),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+
+    match Buku::find().all(&db).await {
+        Ok(buku_list) => ApiResponse::success("Sukses",buku_list),
+        Err(_) => ApiResponse::<()>::error(500, "Internal server error"),
+    }
+}
+
+#[post("/create")]
+async fn create_buku(buku: web::Json<PostedCreate>) -> impl Responder {
+    let db = connect().await;
+    let new_buku = BukuActive {
+        id: Default::default(),
+        tahun_terbit: Set(buku.tahun_terbit),
+        penulis: Set(buku.penulis.clone()),
+        judul: Set(buku.judul.clone()),
+        created_at: Set(chrono::Utc::now().into()),
+        updated_at: Set(chrono::Utc::now().into()),
+    };
+
+    match new_buku.insert(&db).await {
+        Ok(saved_buku) => ApiResponse::success("Data berhasil disimpan", saved_buku),
+        Err(_) => ApiResponse::<()>::error(500, "Internal server error"),
     }
 }
 
 
-#[get("/detail/{id}")]
-async fn detail(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
-}
+#[get("/byid/{id}")]
+async fn detail(id: web::Path<i32>) -> impl Responder {
+    let db = connect().await;
 
-
-#[derive(Deserialize)]
-struct  PostedUpdate{
-    username:String
-}
-
-#[derive(Serialize)]
-struct  UpdateResponse<T>{
-    result:u16,
-    message:String,
-    data:T,
+    match Buku::find_by_id(id.into_inner()).one(&db).await {
+        Ok(Some(buku))=> ApiResponse::success("Sukses", buku),
+        Ok(None) =>ApiResponse::<()>::error(404, "Data not found"),
+        Err(_)=>ApiResponse::<()>::error(500, "Internal server error"),
+    }
 }
 
 #[post("/update")]
 async fn update(req: web::Json<PostedUpdate>) -> impl Responder {
-    let namad;
+    let db = connect().await;
+    let buku_id = req.id;
 
-    if req.username=="dohawuraijua@gmail.com" {
-        namad = "Andre".to_string();
-    }else{
-        namad ="Bukan andre".to_string();
+    match Buku::find_by_id(buku_id).one(&db).await {
+        Ok(Some(existing_buku))=>{
+            let mut buku_active: BukuActive=existing_buku.into();
+            buku_active.tahun_terbit = Set(req.tahun_terbit);
+            buku_active.penulis = Set(req.penulis.clone());
+            buku_active.judul=Set(req.judul.clone());
+            buku_active.updated_at = Set(chrono::Utc::now().into());
+
+            match buku_active.update(&db).await {
+                Ok(updated_buku)=> ApiResponse::success("Data berhasi diperbaharui", updated_buku),
+                Err(_) => ApiResponse::<()>::error(500, "Internal Server Error"),
+            }
+        }
+        Ok(None)=>ApiResponse::<()>::error(404, "Data not found"),
+        Err(_) => ApiResponse::<()>::error(500, "Internal Server Error"),
     }
-    let response = UpdateResponse{
-        result:200,
-        message: format!("username {}",req.username),
-        data:namad
-    };
 
-    HttpResponse::Ok().json(response)
+}
+
+#[delete("delete/{id}")]
+async fn delete_buku(id: web::Path<i32>) -> impl Responder{
+    let db = connect().await;
+    let buku_id = id.into_inner();
+
+    match Buku::find_by_id(buku_id).one(&db).await {
+        Ok(Some(existing_buku))=>{
+            let buku_active: BukuActive = existing_buku.into();
+            match buku_active.delete(&db).await {
+                Ok(_)=>HttpResponse::Ok().body("Delete sukses"),
+                Err(_) => HttpResponse::InternalServerError().finish(),
+            }
+        }
+        Ok(None) => ApiResponse::<()>::error(404, "Data not found"),
+        Err(_) => ApiResponse::<()>::error(500, "Internal Server Error"),
+    }
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig){
-    cfg.service(index).service(detail).service(update);
+    cfg.service(index).service(detail).service(update).service(create_buku);
 }
