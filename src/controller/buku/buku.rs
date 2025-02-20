@@ -29,7 +29,11 @@ async fn index() -> impl Responder {
     let db = connect().await;
 
     match Buku::find().all(&db).await {
-        Ok(buku_list) => ApiResponse::success("Sukses",buku_list),
+        Ok(buku_list) => {
+            println!("{}", serde_json::to_string_pretty(&buku_list).unwrap());
+            ApiResponse::success("Sukses",buku_list)
+        } 
+        
         Err(_) => ApiResponse::<()>::error(500, "Internal server error"),
     }
 }
