@@ -1,10 +1,14 @@
 use actix_web::{delete, get, post, web, HttpResponse, Responder};
+
 use serde::Deserialize;
+use serde::Serialize;
 use crate::model::bukumodel::Entity as Buku;
 use crate::model::bukumodel::ActiveModel as BukuActive;
+
 use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use crate::db::connect;
 use crate::response::ApiResponse;
+use crate::helper::tanggal_indo;
 
 
 #[derive(Deserialize)]
@@ -24,14 +28,36 @@ struct  PostedCreate{
 }
 
 
+#[derive(Serialize)]
+struct BukuResponse {
+    id: i32,
+    tahun_terbit: i32,
+    penulis: String,
+    judul: String,
+    keterangan: String,
+    updated_at: String
+}
+
 #[get("/index")]
 async fn index() -> impl Responder {
     let db = connect().await;
 
     match Buku::find().all(&db).await {
         Ok(buku_list) => {
-            println!("{}", serde_json::to_string_pretty(&buku_list).unwrap());
-            ApiResponse::success("Sukses",buku_list)
+            let response : Vec<BukuResponse> = buku_list.into_iter()
+            .map(|buku|BukuResponse {
+                id:buku.id,
+                tahun_terbit:buku.tahun_terbit,
+                penulis:buku.penulis,
+                judul:buku.judul,
+                keterangan: if buku.tahun_terbit < 2024 {
+                    "buku lama".to_string()
+                }else{
+                    "buku baru".to_string()
+                },
+                updated_at: tanggal_indo(buku.updated_at.to_string(),"full"), 
+            }).collect();
+            ApiResponse::success("Sukses",response)
         } 
         
         Err(_) => ApiResponse::<()>::error(500, "Internal server error"),

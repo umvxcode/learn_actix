@@ -6,6 +6,7 @@ mod db;
 mod router;
 mod model;
 mod response;
+mod helper;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
