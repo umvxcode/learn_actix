@@ -8,7 +8,7 @@ use crate::model::bukumodel::ActiveModel as BukuActive;
 use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 use crate::db::connect;
 use crate::response::ApiResponse;
-use crate::helper::tanggal_indo;
+use crate::helper::AmaDate;
 
 
 #[derive(Deserialize)]
@@ -55,7 +55,7 @@ async fn index() -> impl Responder {
                 }else{
                     "buku baru".to_string()
                 },
-                updated_at: tanggal_indo(buku.updated_at.to_string(),"full"), 
+                updated_at: AmaDate::indoFormat(buku.updated_at.to_string(),"d m Y H:M:S"), 
             }).collect();
             ApiResponse::success("Sukses",response)
         } 
